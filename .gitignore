@@ -1,0 +1,54 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+# Eclipse/IntelliJ IDEA project files
+.idea/
+.project
+.settings/
+*.iml
+
+# Eclipse metadata
+*.log
+*.bak
+*.swp
+
+# Target folder (build output)
+target/
+
+# Dependency folders (local Maven repo)
+*.jar
+*.war
+*.ear
+
+# Maven
+*.mvn
