@@ -3,11 +3,11 @@ package com.caloria.controller;
 import com.caloria.model.Macros;
 import com.caloria.model.Usuario;
 import com.caloria.repository.UsuarioRepository;
-
-import jakarta.validation.Valid;
-
 import com.caloria.dto.UsuarioRequestDTO;
 import com.caloria.service.UsuarioService;
+
+import java.util.List;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -50,5 +50,10 @@ public class UsuarioController {
         u.setCaloriasObjetivo(2100);
 
         return usuarioRepository.save(u);
+    }
+    
+    @GetMapping("/usuarios")
+    public List<Usuario> obtenerTodosUsuarios() {
+        return usuarioService.obtenerTodosUsuarios();
     }
 }

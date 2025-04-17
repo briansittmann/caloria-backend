@@ -9,5 +9,7 @@ public interface UsuarioRepository extends MongoRepository<Usuario, String> {
 
     // Método para buscar por email
     Usuario findByEmail(String email);
+    
+    boolean existsByEmail(String email);
 
 }
