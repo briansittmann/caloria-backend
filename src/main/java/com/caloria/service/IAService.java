@@ -2,96 +2,113 @@ package com.caloria.service;
 
 import com.cjcrafter.openai.OpenAI;
 import com.cjcrafter.openai.assistants.Assistant;
-import com.cjcrafter.openai.threads.Thread; // Evita confundir con java.lang.Thread
-import com.cjcrafter.openai.threads.message.CreateThreadMessageRequest;
-import com.cjcrafter.openai.threads.message.ThreadUser;
-import com.cjcrafter.openai.threads.message.ThreadMessage;
-import com.cjcrafter.openai.threads.message.TextContent;
-import com.cjcrafter.openai.threads.runs.CreateRunRequest;
-import com.cjcrafter.openai.threads.runs.MessageCreationDetails;
-import com.cjcrafter.openai.threads.runs.Run;
-import com.cjcrafter.openai.threads.runs.RunStep;
+import com.cjcrafter.openai.threads.Thread;                    // No confundir con java.lang.Thread
+import com.cjcrafter.openai.threads.message.*;
+import com.cjcrafter.openai.threads.runs.*;
+import com.caloria.dto.MacrosDTO;
+import com.caloria.service.CaloriasCalculator;
+import lombok.RequiredArgsConstructor;
 import okhttp3.OkHttpClient;
-import org.json.JSONException;
 import org.json.JSONObject;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.json.JSONException;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor                // Inyecta los final automáticamente
 public class IAService {
 
+    private final OkHttpClient okHttpClientWithHeader; // viene del Bean configurado
+    private final DiaService diaService;               // NUEVO: maneja la persistencia
+
+    // ---------  Campos propios (inicializados en el ctor) ----------
     private final OpenAI openai;
     private final Assistant assistant;
 
-    @Autowired
-    public IAService(OkHttpClient okHttpClientWithHeader) {
-        // Leer la API Key desde las variables de entorno
-        String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey == null) {
-            throw new IllegalStateException("API Key no configurada");
-        }
-        System.out.println("API Key cargada correctamente: " + apiKey);
+    // Constructor manual porque tenemos que crear OpenAI con okHttp
+    public IAService(OkHttpClient okHttpClientWithHeader,
+                     DiaService diaService) {
 
-        // Construir la instancia de OpenAI utilizando el builder de la clase OpenAI y estableciendo el cliente OkHttp personalizado.
+        this.okHttpClientWithHeader = okHttpClientWithHeader;
+        this.diaService = diaService;
+
+        String apiKey = System.getenv("OPENAI_API_KEY");
+        if (apiKey == null) throw new IllegalStateException("API Key no configurada");
+        System.out.println("API Key cargada correctamente");
+
         this.openai = OpenAI.builder()
                 .apiKey(apiKey)
                 .client(okHttpClientWithHeader)
                 .build();
 
-        // Recuperar el assistant preconfigurado (por ejemplo, creado en el Playground)
+        // Assistant creado en el playground
         this.assistant = openai.assistants().retrieve("asst_s4TKSL0Qi7Mep2tZrr4Lw9tZ");
     }
 
-    public String analizarComida(String descripcionComida) throws InterruptedException {
-        // Crear un nuevo thread de conversación (no usar java.lang.Thread)
+    /**
+     * Llama al Assistant con la descripción del alimento, persiste los datos
+     * en el Día actual del usuario y devuelve el JSON que envió la IA.
+     *
+     * @param descripcionComida descripción natural (ej. "pollo 100 g")
+     * @param usuarioId         id del usuario logueado
+     */
+    public String analizarComida(String descripcionComida, String usuarioId) throws InterruptedException {
+
+        // 1. -------- Crear thread + mensaje ----------
         Thread thread = openai.threads().create();
 
-        // Enviar el mensaje del usuario; en este caso, se utiliza "RgstrAlim " concatenado con la descripción de la comida.
         openai.threads().messages(thread).create(
                 CreateThreadMessageRequest.builder()
                         .role(ThreadUser.USER)
                         .content("RgstrAlim " + descripcionComida)
-                        .build()
-        );
+                        .build());
 
-        // Ejecutar un run usando el assistant preconfigurado
+        // 2. -------- Ejecutar run ----------
         Run run = openai.threads().runs(thread).create(
-                CreateRunRequest.builder()
-                        .assistant(assistant)
-                        .build()
-        );
+                CreateRunRequest.builder().assistant(assistant).build());
 
-        // Busy-wait (esperar activamente) hasta que el run se complete.
         while (!run.getStatus().isTerminal()) {
-            java.lang.Thread.sleep(1000);
+            Thread.sleep(1_000);
             run = openai.threads().runs(thread).retrieve(run);
         }
 
-        // Recopilar la respuesta del assistant recorriendo los pasos (RunStep) del run.
-        StringBuilder respuestaBuilder = new StringBuilder();
+        // 3. -------- Recoger respuesta ----------
+        StringBuilder resultado = new StringBuilder();
         for (RunStep step : openai.threads().runs(thread).steps(run).list().getData()) {
-            if (step.getType() == RunStep.Type.MESSAGE_CREATION) {
-                MessageCreationDetails details = (MessageCreationDetails) step.getStepDetails();
-                String messageId = details.getMessageCreation().getMessageId();
-                ThreadMessage message = openai.threads().messages(thread).retrieve(messageId);
-                for (com.cjcrafter.openai.threads.message.ThreadMessageContent content : message.getContent()) {
-                    if (content.getType() == com.cjcrafter.openai.threads.message.ThreadMessageContent.Type.TEXT) {
-                        respuestaBuilder.append(((TextContent) content).getText().getValue());
-                    }
-                }
-            }
+            if (step.getType() != RunStep.Type.MESSAGE_CREATION) continue;
+
+            MessageCreationDetails det = (MessageCreationDetails) step.getStepDetails();
+            ThreadMessage msg = openai.threads().messages(thread)
+                                       .retrieve(det.getMessageCreation().getMessageId());
+
+            msg.getContent().stream()
+               .filter(c -> c.getType() == ThreadMessageContent.Type.TEXT)
+               .map(c -> ((TextContent) c).getText().getValue())
+               .forEach(resultado::append);
         }
 
-        // Manejo de errores: intentar parsear la respuesta como JSON y verificar si hay un campo "error".
-        String respuesta = respuestaBuilder.toString();
+        // 4. -------- Parsear JSON y manejar errores ----------
+        String respuesta = resultado.toString();
         try {
-            JSONObject jsonResponse = new JSONObject(respuesta);
-            if (jsonResponse.has("error")) {
-                return jsonResponse.getString("error");
-            }
+            JSONObject json = new JSONObject(respuesta);
+
+            if (json.has("error")) return json.getString("error");
+
+            // 5. -------- Extraer macros ----------
+            double prot = json.getDouble("proteinas");
+            double carb = json.getDouble("carbohidratos");
+            double gras = json.getDouble("grasas");
+            double kcals = CaloriasCalculator.calcularCalorias(prot, carb, gras);
+
+            // 6. -------- Persistir en el día actual ----------
+            diaService.registrarAlimento(
+                    usuarioId,
+                    new MacrosDTO(prot, carb, gras, kcals)   // simple DTO para pasar datos
+            );
+
             return respuesta;
+
         } catch (JSONException e) {
-            return "Error procesando la respuesta de la IA. No se pudo convertir el resultado en JSON. Detalle: " + e.getMessage();
+            return "Error procesando la respuesta de la IA: " + e.getMessage();
         }
     }
 }
