@@ -1,22 +1,30 @@
+// src/main/java/com/caloria/controller/ComidaController.java
 package com.caloria.controller;
 
+import com.caloria.dto.AlimentoDTO;
 import com.caloria.service.IAService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/comida")
+@RequiredArgsConstructor
 public class ComidaController {
 
-    @Autowired
-    private IAService iaService;
+    private final IAService iaService;
 
-    // Endpoint para analizar la comida
     @PostMapping("/analizar")
-    public String analizarComida(@RequestBody Map<String, String> requestBody) throws InterruptedException {
-        String descripcionComida = requestBody.get("descripcion");  
-        // Llamamos al servicio para procesar la comida
-        return iaService.analizarComida(descripcionComida);
+    public String analizarComida(
+            @RequestBody AlimentoDTO dto,
+            Authentication auth) throws InterruptedException {
+
+        String usuarioId = auth.getName();
+        // dto.getGramos() es double, ahora el servicio lo recibe como double
+        return iaService.analizarComida(
+            dto.getNombre(),
+            dto.getGramos(),
+            usuarioId
+        );
     }
 }

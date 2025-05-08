@@ -1,44 +1,44 @@
 package com.caloria.service;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import com.caloria.dto.RegistroCredencialDTO;
+import com.caloria.model.Credencial;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import java.util.Date;
-import javax.crypto.SecretKey;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
-    @Value("${jwt.secret}")
-    private String secretKeyString; // La clave secreta que has definido en application.properties
+    private final CredencialService credencialService;   // Maneja email + BCrypt
+    private final JwtService jwtService;                 // Firma y verifica tokens
 
-    private final UsuarioService usuarioService;
-
-    public AuthService(UsuarioService usuarioService) {
-        this.usuarioService = usuarioService;
-    }
-
+    /** Login: valida credenciales y devuelve JWT */
     public String login(String email, String password) {
-        if (usuarioService.validarCredenciales(email, password)) {
-            return generateJwt(email);  // Genera el JWT si las credenciales son correctas
-        } else {
-            throw new RuntimeException("Credenciales incorrectas");
+        // Validar las credenciales (usuario y contraseña)
+        Credencial cred = credencialService.validar(email, password);
+
+        // Si no se encuentra el usuario
+        if (cred == null) {
+            throw new RuntimeException("Usuario no encontrado");
         }
+
+        // Verificar si la contraseña es incorrecta usando el hash
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        if (!encoder.matches(password, cred.getPasswordHash())) {
+            throw new RuntimeException("Contraseña incorrecta");
+        }
+
+        // Si todo es correcto, genera y devuelve el token JWT
+        return jwtService.generateToken(cred.getUsuarioId(), cred.getRole());
     }
 
-    private String generateJwt(String email) {
-        // Generar la clave secreta segura con Keys.secretKeyFor, que asegura que sea al menos de 256 bits
-        SecretKey secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    /** Registro paso 1: crea la credencial y devuelve JWT */
+    public String register(RegistroCredencialDTO dto) {
+        // Registrar nuevo usuario (esto podría incluir validaciones como email único, etc.)
+        Credencial cred = credencialService.registrar(dto);
 
-        long expirationTime = 1000 * 60 * 60; // 1 hora de expiración
-
-        // Crear y firmar el JWT usando la clave generada
-        return Jwts.builder()
-                .setSubject(email)  // El "sujeto" del JWT es el email del usuario
-                .setExpiration(new Date(System.currentTimeMillis() + expirationTime)) // Establecer la expiración
-                .signWith(secretKey, SignatureAlgorithm.HS256) // Firmar con la clave secreta generada
-                .compact();
+        // Generar y devolver el token
+        return jwtService.generateToken(cred.getUsuarioId(), cred.getRole());
     }
 }

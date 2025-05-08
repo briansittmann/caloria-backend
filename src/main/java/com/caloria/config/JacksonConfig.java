@@ -10,7 +10,8 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 @Configuration
 public class JacksonConfig {
 
-    @Bean
+    @SuppressWarnings("deprecation")
+	@Bean
     public ObjectMapper objectMapper() {
         return Jackson2ObjectMapperBuilder.json()
                 .modules(new KotlinModule.Builder()

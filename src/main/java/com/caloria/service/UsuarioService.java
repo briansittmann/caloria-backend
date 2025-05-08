@@ -1,72 +1,113 @@
 package com.caloria.service;
 
-import com.caloria.dto.UsuarioRequestDTO;
+import com.caloria.dto.BasicosDTO;
+import com.caloria.dto.PerfilUsuarioDTO;
+import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
 import com.caloria.repository.UsuarioRepository;
-
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class UsuarioService {
 
-    @Autowired
-    private UsuarioRepository usuarioRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final CatalogoRecetasService catalogo;
 
-    private final BCryptPasswordEncoder passwordEncoder;
+    /** crea o actualiza el perfil asociado a usuarioId */
+    public Usuario crearOActualizar(String usuarioId, PerfilUsuarioDTO dto) {
+        Usuario usr = usuarioRepository.findById(usuarioId)
+            .orElseGet(() -> {
+                Usuario nuevo = new Usuario();
+                nuevo.setId(usuarioId);
+                return nuevo;
+            });
 
-    // Constructor para inicializar BCryptPasswordEncoder
-    public UsuarioService() {
-        this.passwordEncoder = new BCryptPasswordEncoder(); // Instanciamos BCryptPasswordEncoder
+        // … setters de los campos previos …
+        usr.setNombre(dto.getNombre());
+        usr.setEdad(dto.getEdad());
+        usr.setSexo(dto.getSexo());
+        usr.setAlturaCm(dto.getAlturaCm());
+        usr.setPesoKg(dto.getPesoKg());
+        usr.setNivelActividad(dto.getNivelActividad());
+        usr.setObjetivo(dto.getObjetivo());
+        usr.setCaloriasObjetivo(dto.getCaloriasObjetivo());
+        usr.setMacrosObjetivo(dto.getMacrosObjetivo());
+        usr.setHoraInicioDia(dto.getHoraInicioDia());
+
+        usr.setPreferencias(dto.getPreferencias() != null
+        	    ? dto.getPreferencias() : List.of());
+        	usr.setAlergias(dto.getAlergias() != null
+        	    ? dto.getAlergias() : List.of());
+
+        usr.setPerfilCompleto(true);
+        return usuarioRepository.save(usr);
     }
 
-    // Método para crear un nuevo usuario con la contraseña cifrada
-    public Usuario crearUsuario(UsuarioRequestDTO usuarioDTO) {
-        // Verificar si el email ya existe
-        if (usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El email ya está registrado");
-        }
-
-        // Crear el nuevo usuario
-        Usuario nuevoUsuario = new Usuario();
-        nuevoUsuario.setNombre(usuarioDTO.getNombre());
-        nuevoUsuario.setEmail(usuarioDTO.getEmail());
-        nuevoUsuario.setEdad(usuarioDTO.getEdad());
-        nuevoUsuario.setSexo(usuarioDTO.getSexo());
-        nuevoUsuario.setAlturaCm(usuarioDTO.getAlturaCm());
-        nuevoUsuario.setPesoKg(usuarioDTO.getPesoKg());
-        nuevoUsuario.setNivelActividad(usuarioDTO.getNivelActividad());
-        nuevoUsuario.setObjetivo(usuarioDTO.getObjetivo());
-        nuevoUsuario.setCaloriasObjetivo(usuarioDTO.getCaloriasObjetivo());
-        nuevoUsuario.setMacrosObjetivo(usuarioDTO.getMacrosObjetivo());
-        nuevoUsuario.setHoraInicioDia(usuarioDTO.getHoraInicioDia());
-
-        // Cifrar la contraseña con BCrypt
-        String hashedPassword = passwordEncoder.encode(usuarioDTO.getPassword());
-        nuevoUsuario.setPassword(hashedPassword);  // Guardamos la contraseña cifrada
-
-        return usuarioRepository.save(nuevoUsuario);  // Guardamos el nuevo usuario en la base de datos
+    public Usuario obtenerPerfil(String usuarioId) {
+        return usuarioRepository.findById(usuarioId).orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Perfil no encontrado"));
+    }
+    
+    public Usuario actualizarBasicos(String usuarioId, BasicosDTO dto) {
+        Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
+        u.setNombre(dto.getNombre());
+        u.setEdad(dto.getEdad());
+        u.setSexo(dto.getSexo());
+        u.setPesoKg(dto.getPesoKg());
+        u.setAlturaCm(dto.getAlturaCm());
+        u.setHoraInicioDia(dto.getHoraInicioDia());
+        return usuarioRepository.save(u);
     }
 
-    public List<Usuario> obtenerTodosUsuarios() {
-        return usuarioRepository.findAll();
+    public Usuario actualizarActividad(String usuarioId, String nivelActividad) {
+        Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
+        u.setNivelActividad(nivelActividad);
+        return usuarioRepository.save(u);
     }
 
-    // Método para validar las credenciales del login
-    public boolean validarCredenciales(String email, String password) {
-        Usuario usuario = usuarioRepository.findByEmail(email);
-
-        // Comprobamos si el usuario existe y si la contraseña proporcionada coincide con la almacenada
-        if (usuario != null && passwordEncoder.matches(password, usuario.getPassword())) {
-            return true;  // Las credenciales son correctas
-        }
-
-        return false;  // Las credenciales no son válidas
+    public String obtenerNivelActividad(String usuarioId) {
+        return usuarioRepository.findById(usuarioId)
+                .map(Usuario::getNivelActividad)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
     }
+    
+    /**
+     * Añade al perfil del usuario las recetas recibidas desde la IA,
+     * guardándolas primero en el catálogo si no existían.
+     * Devuelve la lista de Receta completas que quedaron asociadas al usuario.
+     */
+    public List<Receta> guardarRecetasUsuario(String uid, List<Receta> nuevas) {
+        // 1) Carga al usuario
+        Usuario user = usuarioRepository.findById(uid)
+            .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + uid));
+
+        // 2) Guarda cada nueva receta en el catálogo (si no existe) y obtiene su ID
+        List<String> nuevosIds = nuevas.stream()
+            .map(r -> catalogo.saveIfNotExists(r).getId())
+            .collect(Collectors.toList());
+
+        // 3) Añade esos IDs al array de recetas del usuario (sin duplicados)
+        Set<String> mezclado = new LinkedHashSet<>();
+        if (user.getRecetas() != null) mezclado.addAll(user.getRecetas());
+        mezclado.addAll(nuevosIds);
+        user.setRecetas(new ArrayList<>(mezclado));
+
+        // 4) Persiste cambios en el usuario
+        usuarioRepository.save(user);
+
+        // 5) Recupera y devuelve las Receta completas asociadas
+        return catalogo.findAllById(user.getRecetas());
+    }
+
 }

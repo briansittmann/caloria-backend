@@ -14,4 +14,6 @@ public class ResumenDiaDTO {
     private Macros macrosObjetivo;
     private Macros macrosConsumidos;
     private Macros macrosRestantes;
+    
+    private int consejosGenerados;
 }

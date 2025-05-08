@@ -1,108 +1,189 @@
+// src/main/java/com/caloria/service/IAService.java
 package com.caloria.service;
 
 import com.cjcrafter.openai.OpenAI;
 import com.cjcrafter.openai.assistants.Assistant;
-import com.cjcrafter.openai.threads.Thread;                    // No confundir con java.lang.Thread
+import com.cjcrafter.openai.threads.Thread;            // SDK de OpenAI
 import com.cjcrafter.openai.threads.message.*;
 import com.cjcrafter.openai.threads.runs.*;
 import com.caloria.dto.MacrosDTO;
-import com.caloria.service.CaloriasCalculator;
+import com.caloria.model.Alimento;
+import com.caloria.service.CatalogoAlimentoService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import okhttp3.OkHttpClient;
-import org.json.JSONObject;
+
+import java.util.List;
+
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor                // Inyecta los final automáticamente
+@RequiredArgsConstructor
 public class IAService {
+	
+    private final OkHttpClient okHttpClientWithHeader;
+    private final DiaService diaService;
+    private final CatalogoAlimentoService catalogoService;
+    private OpenAI openai;
+    private Assistant assistant;
+    private Assistant assistantRecetas;
 
-    private final OkHttpClient okHttpClientWithHeader; // viene del Bean configurado
-    private final DiaService diaService;               // NUEVO: maneja la persistencia
-
-    // ---------  Campos propios (inicializados en el ctor) ----------
-    private final OpenAI openai;
-    private final Assistant assistant;
-
-    // Constructor manual porque tenemos que crear OpenAI con okHttp
-    public IAService(OkHttpClient okHttpClientWithHeader,
-                     DiaService diaService) {
-
-        this.okHttpClientWithHeader = okHttpClientWithHeader;
-        this.diaService = diaService;
-
+    @PostConstruct
+    private void init() {
         String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey == null) throw new IllegalStateException("API Key no configurada");
-        System.out.println("API Key cargada correctamente");
-
+        if (apiKey == null) {
+            throw new IllegalStateException("OPENAI_API_KEY no configurada");
+        }
         this.openai = OpenAI.builder()
-                .apiKey(apiKey)
-                .client(okHttpClientWithHeader)
-                .build();
-
-        // Assistant creado en el playground
+                            .apiKey(apiKey)
+                            .client(okHttpClientWithHeader)
+                            .build();
         this.assistant = openai.assistants().retrieve("asst_s4TKSL0Qi7Mep2tZrr4Lw9tZ");
+        
+        // asistente para generar recetas
+        this.assistantRecetas = openai.assistants()
+                                      .retrieve("asst_ObZcapHILpvrxu3PnEJUBgla");
     }
-
     /**
-     * Llama al Assistant con la descripción del alimento, persiste los datos
-     * en el Día actual del usuario y devuelve el JSON que envió la IA.
+     * Genera recetas basadas en preferencias, alergias, macros restantes
+     * y número de comidas deseadas.
      *
-     * @param descripcionComida descripción natural (ej. "pollo 100 g")
-     * @param usuarioId         id del usuario logueado
+     * @param preferencias lista de preferencias del usuario
+     * @param alergias     lista de alergias del usuario
+     * @param macrosRest   DTO con calorías y macros restantes
+     * @param numComidas   número de recetas a generar (1–4)
      */
-    public String analizarComida(String descripcionComida, String usuarioId) throws InterruptedException {
+    public String generarRecetas(
+        List<String> preferencias,
+        List<String> alergias,
+        MacrosDTO macrosRest,
+        int numComidas
+    ) throws InterruptedException {
+        // 1) Construcción del JSON de entrada
+        JSONObject payload = new JSONObject();
+        payload.put("preferencias", preferencias);
+        payload.put("alergias", alergias);
 
-        // 1. -------- Crear thread + mensaje ----------
+        JSONObject m = new JSONObject();
+        m.put("caloriasRestantes",   macrosRest.getCalorias());
+        m.put("proteinasRestantes",  macrosRest.getProteinasG());
+        m.put("carbohidratosRestantes", macrosRest.getCarbohidratosG());
+        m.put("grasasRestantes",     macrosRest.getGrasasG());
+        payload.put("macrosRestantes", m);
+
+        payload.put("numComidas", numComidas);
+
+        // 2) Envío al asistente de recetas
         Thread thread = openai.threads().create();
-
         openai.threads().messages(thread).create(
-                CreateThreadMessageRequest.builder()
-                        .role(ThreadUser.USER)
-                        .content("RgstrAlim " + descripcionComida)
-                        .build());
+            CreateThreadMessageRequest.builder()
+                .role(ThreadUser.USER)
+                .content(payload.toString())
+                .build()
+        );
 
-        // 2. -------- Ejecutar run ----------
-        Run run = openai.threads().runs(thread).create(
-                CreateRunRequest.builder().assistant(assistant).build());
-
+        // 3) Ejecutar el run con el assistantRecetas
+        Run run = openai.threads().runs(thread)
+                          .create(CreateRunRequest.builder()
+                              .assistant(assistantRecetas)
+                              .build());
         while (!run.getStatus().isTerminal()) {
-            Thread.sleep(1_000);
+        	java.lang.Thread.sleep(1000);
             run = openai.threads().runs(thread).retrieve(run);
         }
 
-        // 3. -------- Recoger respuesta ----------
-        StringBuilder resultado = new StringBuilder();
+        // 4) Concatenar respuesta
+        StringBuilder sb = new StringBuilder();
         for (RunStep step : openai.threads().runs(thread).steps(run).list().getData()) {
             if (step.getType() != RunStep.Type.MESSAGE_CREATION) continue;
-
             MessageCreationDetails det = (MessageCreationDetails) step.getStepDetails();
             ThreadMessage msg = openai.threads().messages(thread)
                                        .retrieve(det.getMessageCreation().getMessageId());
-
             msg.getContent().stream()
                .filter(c -> c.getType() == ThreadMessageContent.Type.TEXT)
                .map(c -> ((TextContent) c).getText().getValue())
-               .forEach(resultado::append);
+               .forEach(sb::append);
+        }
+        
+        String respuesta = sb.toString();
+        System.out.println("=== [IAService.generarRecetas] JSON recibido de la IA ===");
+        System.out.println(respuesta);
+        System.out.println("========================================================");
+
+        // 5) Devolver el JSON puro que envía la IA
+        return respuesta;
+    }
+    /**
+     * @param nombre    nombre del alimento (p.ej. "Pollo cocido")
+     * @param gramos    gramos consumidos (p.ej. 90.5)
+     * @param usuarioId extraído del JWT
+     */
+    public String analizarComida(String nombre, double gramos, String usuarioId) throws InterruptedException {
+        String descripcion = nombre + " " + (int) Math.round(gramos);
+
+        Thread thread = openai.threads().create();
+        openai.threads().messages(thread).create(
+            CreateThreadMessageRequest.builder()
+                .role(ThreadUser.USER)
+                .content("RgstrAlim " + descripcion)
+                .build()
+        );
+
+        Run run = openai.threads().runs(thread)
+                          .create(CreateRunRequest.builder().assistant(assistant).build());
+        while (!run.getStatus().isTerminal()) {
+            java.lang.Thread.sleep(1000);
+            run = openai.threads().runs(thread).retrieve(run);
         }
 
-        // 4. -------- Parsear JSON y manejar errores ----------
-        String respuesta = resultado.toString();
+        StringBuilder sb = new StringBuilder();
+        for (RunStep step : openai.threads().runs(thread).steps(run).list().getData()) {
+            if (step.getType() != RunStep.Type.MESSAGE_CREATION) continue;
+            MessageCreationDetails det = (MessageCreationDetails) step.getStepDetails();
+            ThreadMessage msg = openai.threads().messages(thread)
+                                       .retrieve(det.getMessageCreation().getMessageId());
+            msg.getContent().stream()
+               .filter(c -> c.getType() == ThreadMessageContent.Type.TEXT)
+               .map(c -> ((TextContent) c).getText().getValue())
+               .forEach(sb::append);
+        }
+
+        String respuesta = sb.toString();
+        System.out.println(">>> Respuesta cruda de la IA: " + respuesta);
+
         try {
             JSONObject json = new JSONObject(respuesta);
-
             if (json.has("error")) return json.getString("error");
 
-            // 5. -------- Extraer macros ----------
-            double prot = json.getDouble("proteinas");
-            double carb = json.getDouble("carbohidratos");
-            double gras = json.getDouble("grasas");
+            JSONObject data;
+            String key;
+            if (json.has("proteinas")) {
+                data = json;
+                key  = nombre;
+            } else {
+                key  = json.keys().next();
+                data = json.getJSONObject(key);
+            }
+
+            double prot  = data.getDouble("proteinas");
+            double carb  = data.getDouble("carbohidratos");
+            double gras  = data.getDouble("grasas");
             double kcals = CaloriasCalculator.calcularCalorias(prot, carb, gras);
 
-            // 6. -------- Persistir en el día actual ----------
+            Alimento raw = new Alimento();
+            raw.setNombre(key);
+            raw.setGramos((int) Math.round(gramos));
+            raw.setProteinasG(prot);
+            raw.setCarbohidratosG(carb);
+            raw.setGrasasG(gras);
+            raw.setCalorias(kcals);
+            catalogoService.guardarSiNoExiste(raw);
+
             diaService.registrarAlimento(
-                    usuarioId,
-                    new MacrosDTO(prot, carb, gras, kcals)   // simple DTO para pasar datos
+                usuarioId,
+                new MacrosDTO(prot, carb, gras, kcals)
             );
 
             return respuesta;

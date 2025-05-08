@@ -1,13 +1,20 @@
 package com.caloria.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
+/**
+ * DTO para transportar los macronutrientes más las calorías
+ * que calcula la IA a partir de esos macros.
+ */
 @Data
-@AllArgsConstructor
+@NoArgsConstructor          
+@AllArgsConstructor         
 public class MacrosDTO {
-    private double proteinas;
-    private double carbohidratos;
-    private double grasas;
+
+    private double proteinasG;
+    private double carbohidratosG;
+    private double grasasG;
     private double calorias;
 }
