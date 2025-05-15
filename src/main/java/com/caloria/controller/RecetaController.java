@@ -1,21 +1,21 @@
-// src/main/java/com/caloria/controller/RecetaController.java
 package com.caloria.controller;
 
-import com.caloria.dto.MacrosDTO;
-import com.caloria.dto.RecetaRequestDTO;
-import com.caloria.dto.ResumenDiaDTO;
-import com.caloria.model.Macros;
+import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
+import com.caloria.dto.MacrosDTO;
+import com.caloria.dto.ResumenDiaDTO;
+import com.caloria.service.CatalogoRecetasService;
 import com.caloria.service.DiaService;
 import com.caloria.service.IAService;
 import com.caloria.service.UsuarioService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/recetas")
@@ -24,41 +24,92 @@ public class RecetaController {
 
     private final IAService iaService;
     private final DiaService diaService;
-    private final UsuarioService usuarioService; // si sacas preferencias/alergias de aquí
+    private final UsuarioService usuarioService;
+    private final CatalogoRecetasService catalogoService;
+    private final ObjectMapper objectMapper;  // bean de Jackson
 
     @PostMapping("/generar")
-    public String generarRecetas(
+    public ResponseEntity<List<Receta>> generarYGuardarRecetas(
             @RequestParam int numComidas,
-            Authentication auth) throws InterruptedException {
+            Authentication auth) throws Exception {
 
         String uid = auth.getName();
 
-        // 1) Obtenemos resumen del día
+        // 1) Obtener resumen
         ResumenDiaDTO resumen = diaService.getResumenDelDia(uid);
-
-        // 2) Sacamos el modelo Macros de "macrosRestantes" y la calorías
-        Macros restos = resumen.getMacrosRestantes();
-        double caloriasRest = resumen.getCaloriasRestantes();
-
-        // 3) Convertimos a DTO (necesario para el servicio de IA)
         MacrosDTO macrosDto = new MacrosDTO(
-            restos.getProteinasG(),
-            restos.getCarbohidratosG(),
-            restos.getGrasasG(),
-            caloriasRest
+            resumen.getMacrosRestantes().getProteinasG(),
+            resumen.getMacrosRestantes().getCarbohidratosG(),
+            resumen.getMacrosRestantes().getGrasasG(),
+            resumen.getCaloriasRestantes()
         );
 
-        // 4) Sacamos preferencias y alergias del usuario (o de donde las guardes)
+        // 2) Preferencias y alergias
         Usuario usr = usuarioService.obtenerPerfil(uid);
-        List<String> prefs = usr.getPreferencias();   // asegúrate de que existen getter
+        List<String> prefs = usr.getPreferencias();
         List<String> alerg = usr.getAlergias();
 
-        // 5) Llamada al IAService con los tipos correctos
-        return iaService.generarRecetas(
-            prefs,
-            alerg,
-            macrosDto,
-            numComidas  // Integer → int automáticamente
-        );
+        // 3) Llamar a la IA y obtener el JSON crudo
+        String jsonRecetas = iaService.generarRecetas(prefs, alerg, macrosDto, numComidas);
+
+        // 4) Parsear ese JSON a List<Receta>
+        //    suponiendo que el JSON tiene la forma { "recetas":[ {...}, {...} ] }
+        RecetasWrapper wrapper = objectMapper
+            .readValue(jsonRecetas, RecetasWrapper.class);
+        List<Receta> recetasIA = wrapper.getRecetas();
+
+        // 5) Guardar cada receta en el catálogo (si no existía)
+        List<Receta> guardadas = recetasIA.stream()
+            .map(catalogoService::saveIfNotExists)
+            .collect(Collectors.toList());
+        
+        System.out.println("/// RECETAS PARA FRONT (usuario=" + uid + "):");
+        guardadas.forEach(r -> System.out.println("  * " + r));
+        
+        return ResponseEntity.ok(guardadas);
+    }
+
+    /** Simple DTO auxiliar para poder parsear el array desde el JSON de la IA */
+    public static class RecetasWrapper {
+        private List<Receta> recetas;
+        public List<Receta> getRecetas() { return recetas; }
+        public void setRecetas(List<Receta> recetas) { this.recetas = recetas; }
+    }
+    
+    @PostMapping("/guardar")
+    public ResponseEntity<List<Receta>> guardarRecetasIA(
+        @RequestBody List<Receta> recetasIA,
+        Authentication auth) {
+
+      // Aquí tomas el UID directamente del token validado
+      String uid = auth.getName();
+
+      List<Receta> asociadas = usuarioService.guardarRecetasUsuario(uid, recetasIA);
+      
+      System.out.println("/// RECETAS GUARDADAS POR usuario=" + uid + ": " +
+              asociadas.stream().map(Receta::getId).collect(Collectors.toList()));
+      
+      return ResponseEntity.ok(asociadas);
+    }
+    
+
+    /**
+     * Devuelve todas las recetas guardadas en el perfil del usuario.
+     */
+    @GetMapping("/mis")
+    public ResponseEntity<List<Receta>> misRecetas(Authentication auth) {
+        String uid = auth.getName();
+        List<Receta> recetas = usuarioService.obtenerRecetasUsuario(uid);
+        return ResponseEntity.ok(recetas);
+    }
+    
+    /** Elimina una receta del array del usuario */
+    @DeleteMapping("/{recetaId}")
+    public ResponseEntity<Void> eliminarReceta(
+        @PathVariable String recetaId,
+        Authentication auth) {
+      String uid = auth.getName();
+      usuarioService.eliminarRecetaUsuario(uid, recetaId);
+      return ResponseEntity.noContent().build();
     }
 }

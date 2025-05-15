@@ -31,9 +31,19 @@ public class CatalogoRecetasService {
         }
         return lista;
     }
-
+    /**
+     * Inserta la receta en el catálogo si no existe (por título, case-insensitive).
+     */
     public Receta saveIfNotExists(Receta receta) {
         return repo.findByTituloIgnoreCase(receta.getTitulo())
                    .orElseGet(() -> repo.save(receta));
     }
+    
+    /**
+     * Recupera todas las recetas cuyos IDs están en la lista dada.
+     */
+    public List<Receta> findAllByIds(List<String> ids) {
+      return repo.findAllById(ids);
+    }
+    
 }

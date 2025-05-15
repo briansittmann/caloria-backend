@@ -18,23 +18,35 @@ public class Usuario {
     @Id
     private String id;
 
+ // Paso 1 – básicos
     private String nombre;
     private Integer edad;
     private String sexo;
     private Integer alturaCm;
     private Integer pesoKg;
-    private String nivelActividad;     // mapeado a NivelActividad
-    private String objetivo;           // mapeado a ObjetivoNutricional
+    private String horaInicioDia;
+    private boolean basicosCompletos = false;
 
+    // Paso 2 – actividad
+    private String nivelActividad;
+    private boolean actividadCompleta = false;
+
+    // Paso 3 – objetivo
+    private String objetivo;
+    private boolean objetivoCompleto = false;
+
+    // Paso 4 – preferencias
+    private List<String> preferencias = new ArrayList<>();
+    private List<String> alergias      = new ArrayList<>();
+    private boolean preferenciasCompletas = false;
+
+    // Metas (solo cuando todo lo anterior esté completo)
     private double caloriasObjetivo;
     private Macros macrosObjetivo;
-
-    private String horaInicioDia;      // ej. "05:00"
-
     private boolean perfilCompleto = false;
+
     
-    private List<String> preferencias = new ArrayList<>();
-    private List<String> alergias     = new ArrayList<>();
+    
     @JsonIgnore
     private List<Dia> historialDeDias = new ArrayList<>();
     private List<String> recetas = new ArrayList<>();

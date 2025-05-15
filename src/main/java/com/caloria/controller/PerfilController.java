@@ -32,7 +32,7 @@ public class PerfilController {
         Authentication auth
     ) {
         String uid = auth.getName();
-        Usuario perfil = usuarioService.crearOActualizar(uid, dto);
+        Usuario perfil = usuarioService.crearOActualizarPerfil(uid, dto);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(perfil);
@@ -48,7 +48,7 @@ public class PerfilController {
         Authentication auth
     ) {
         String uid = auth.getName();
-        Usuario perfil = usuarioService.crearOActualizar(uid, dto);
+        Usuario perfil = usuarioService.crearOActualizarPerfil(uid, dto);
         return ResponseEntity.ok(perfil);
     }
 
@@ -78,7 +78,7 @@ public class PerfilController {
         Authentication auth
     ) {
         String uid = auth.getName();
-        Usuario usuario = usuarioService.actualizarActividad(uid, dto.getNivelActividad());
+        Usuario usuario = usuarioService.actualizarNivelActividad(uid, dto.getNivelActividad());
         return ResponseEntity.ok(usuario);
     }
 
@@ -120,6 +120,20 @@ public class PerfilController {
         return ResponseEntity.ok(new PerfilCompletoDTO(completo));
     }
     
-   
+    /**
+     * Estado granular de cada fase del perfil.
+     * GET /usuarios/perfil/estado
+     */
+    @GetMapping("/estado")
+    public ResponseEntity<PerfilEstadoDTO> estadoPerfil(Authentication auth) {
+      Usuario u = usuarioService.obtenerPerfil(auth.getName());
+      return ResponseEntity.ok(new PerfilEstadoDTO(
+        u.getNombre()       != null && !u.getNombre().isBlank()
+      , u.getNivelActividad() != null
+      , u.getObjetivo()       != null
+      , u.getPreferencias()   != null && !u.getPreferencias().isEmpty()
+      , u.isPerfilCompleto()
+      ));
+    }
     
 }
