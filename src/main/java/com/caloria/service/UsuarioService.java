@@ -6,7 +6,10 @@ import com.caloria.dto.PerfilUsuarioDTO;
 import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
 import com.caloria.repository.UsuarioRepository;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -17,22 +20,28 @@ import java.util.ArrayList;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {
 
-    private final UsuarioRepository usuarioRepo;
+    private final UsuarioRepository      usuarioRepo;
     private final CatalogoRecetasService catalogo;
 
-    /** Crea o actualiza todo el perfil de golpe */
-    public Usuario crearOActualizarPerfil(String usuarioId, PerfilUsuarioDTO dto) {
-        Usuario u = usuarioRepo.findById(usuarioId)
+    /* ------------------------------------------------------------ */
+    /* Crea o actualiza todo el perfil de golpe                      */
+    /* ------------------------------------------------------------ */
+    public Usuario crearOActualizarPerfil(String uid, PerfilUsuarioDTO dto) {
+
+        Usuario u = usuarioRepo.findById(uid)
             .orElseGet(() -> {
+                log.debug("Creando usuario nuevo con id {}", uid);
                 Usuario nuevo = new Usuario();
-                nuevo.setId(usuarioId);
+                nuevo.setId(uid);
                 return nuevo;
             });
 
+        // set de campos
         u.setNombre(dto.getNombre());
         u.setEdad(dto.getEdad());
         u.setSexo(dto.getSexo());
@@ -43,20 +52,38 @@ public class UsuarioService {
         u.setHoraInicioDia(dto.getHoraInicioDia());
         u.setPreferencias(dto.getPreferencias());
         u.setAlergias(dto.getAlergias());
-
         u.setPerfilCompleto(true);
-        return usuarioRepo.save(u);
+
+        Usuario guardado = usuarioRepo.save(u);
+        log.debug("Perfil completo guardado para uid={}", uid);
+        return guardado;
     }
 
-    /** Obtiene el perfil */
-    public Usuario obtenerPerfil(String usuarioId) {
-        return usuarioRepo.findById(usuarioId)
+    /* ------------------------------------------------------------ */
+    /* Crea un usuario esqueleto (registro)                         */
+    /* ------------------------------------------------------------ */
+    public Usuario crearUsuarioEsqueleto(String email) {
+        Usuario u = new Usuario();
+        u.setEmail(email);
+        Usuario saved = usuarioRepo.save(u);
+        log.debug("Usuario esqueleto creado uid={} email={}", saved.getId(), email);
+        return saved;
+    }
+
+    /* ------------------------------------------------------------ */
+    /* Lectura de perfil                                            */
+    /* ------------------------------------------------------------ */
+    public Usuario obtenerPerfil(String uid) {
+        return usuarioRepo.findById(uid)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
     }
 
-    /** Actualiza solo datos básicos */
-    public Usuario actualizarBasicos(String usuarioId, BasicosDTO dto) {
-        Usuario u = obtenerPerfil(usuarioId);
+    /* ------------------------------------------------------------ */
+    /* Paso 1: datos básicos                                        */
+    /* ------------------------------------------------------------ */
+    public Usuario actualizarBasicos(String uid, BasicosDTO dto) {
+        Usuario u = obtenerPerfil(uid);
+
         u.setNombre(dto.getNombre());
         u.setEdad(dto.getEdad());
         u.setSexo(dto.getSexo());
@@ -64,43 +91,53 @@ public class UsuarioService {
         u.setAlturaCm(dto.getAlturaCm());
         u.setHoraInicioDia(dto.getHoraInicioDia());
         u.setBasicosCompletos(true);
-        return usuarioRepo.save(u);
+
+        Usuario saved = usuarioRepo.save(u);
+        log.debug("Básicos completados para uid={}", uid);
+        return saved;
     }
 
-    /** Actualiza solo nivel de actividad */
-    public Usuario actualizarNivelActividad(String usuarioId, String nivel) {
-        Usuario u = obtenerPerfil(usuarioId);
+    /* ------------------------------------------------------------ */
+    /* Paso 2: nivel de actividad                                   */
+    /* ------------------------------------------------------------ */
+    public Usuario actualizarNivelActividad(String uid, String nivel) {
+        Usuario u = obtenerPerfil(uid);
         u.setNivelActividad(nivel);
         u.setActividadCompleta(true);
-        return usuarioRepo.save(u);
-    }
-    
-    /** Devuelve el nivel de actividad actual (o null si no está definido) */
-    public String obtenerNivelActividad(String usuarioId) {
-        return obtenerPerfil(usuarioId).getNivelActividad();
+        Usuario saved = usuarioRepo.save(u);
+        log.debug("Actividad '{}' guardada para uid={}", nivel, uid);
+        return saved;
     }
 
-    /** Devuelve todas las recetas del usuario */
-    public List<Receta> obtenerRecetasUsuario(String usuarioId) {
-        Usuario u = obtenerPerfil(usuarioId);
+    public String obtenerNivelActividad(String uid) {
+        return obtenerPerfil(uid).getNivelActividad();
+    }
+
+    /* ------------------------------------------------------------ */
+    /* Recetas                                                      */
+    /* ------------------------------------------------------------ */
+    public List<Receta> obtenerRecetasUsuario(String uid) {
+        Usuario u = obtenerPerfil(uid);
         return catalogo.findAllByIds(u.getRecetas());
     }
 
-    /** Guarda nuevas recetas en el perfil sin duplicados */
-    public List<Receta> guardarRecetasUsuario(String usuarioId, List<Receta> nuevas) {
-        Usuario u = obtenerPerfil(usuarioId);
+    public List<Receta> guardarRecetasUsuario(String uid, List<Receta> nuevas) {
+        Usuario u = obtenerPerfil(uid);
+
         Set<String> ids = new LinkedHashSet<>(u.getRecetas());
         nuevas.forEach(r -> ids.add(catalogo.saveIfNotExists(r).getId()));
         u.setRecetas(new ArrayList<>(ids));
+
         usuarioRepo.save(u);
+        log.debug("{} recetas guardadas para uid={}", nuevas.size(), uid);
         return catalogo.findAllByIds(u.getRecetas());
     }
 
-    /** Elimina una receta del perfil */
-    public void eliminarRecetaUsuario(String usuarioId, String recetaId) {
-        Usuario u = obtenerPerfil(usuarioId);
+    public void eliminarRecetaUsuario(String uid, String recetaId) {
+        Usuario u = obtenerPerfil(uid);
         if (u.getRecetas().remove(recetaId)) {
             usuarioRepo.save(u);
+            log.debug("Receta {} eliminada de uid={}", recetaId, uid);
         }
     }
 }

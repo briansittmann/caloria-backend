@@ -4,6 +4,7 @@ public enum ObjetivoNutricional {
     CUT_LIGERO(0.90),
     CUT_MEDIO(0.80),
     CUT_AGRESIVO(0.75),
+    MANTENER(1.00),
     BULK_CONSERVADOR(1.05),
     BULK_ESTANDAR(1.10),
     BULK_AGRESIVO(1.15);

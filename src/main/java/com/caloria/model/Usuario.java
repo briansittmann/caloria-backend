@@ -19,6 +19,7 @@ public class Usuario {
     private String id;
 
  // Paso 1 – básicos
+    private String email;
     private String nombre;
     private Integer edad;
     private String sexo;

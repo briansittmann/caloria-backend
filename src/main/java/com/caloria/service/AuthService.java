@@ -2,16 +2,20 @@ package com.caloria.service;
 
 import com.caloria.dto.RegistroCredencialDTO;
 import com.caloria.model.Credencial;
+import com.caloria.model.Usuario;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+@Slf4j  
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final CredencialService credencialService;   // Maneja email + BCrypt
-    private final JwtService jwtService;                 // Firma y verifica tokens
+    private final JwtService jwtService;
+    // Firma y verifica tokens
 
     /** Login: valida credenciales y devuelve JWT */
     public String login(String email, String password) {
@@ -33,12 +37,19 @@ public class AuthService {
         return jwtService.generateToken(cred.getUsuarioId(), cred.getRole());
     }
 
-    /** Registro paso 1: crea la credencial y devuelve JWT */
+
+    /** Registro: crea credencial + usuario y devuelve JWT */
     public String register(RegistroCredencialDTO dto) {
-        // Registrar nuevo usuario (esto podría incluir validaciones como email único, etc.)
+
+        // CredencialService ya:
+        //   • guarda credencial
+        //   • crea Usuario esqueleto
+        //   • asigna usuarioId
         Credencial cred = credencialService.registrar(dto);
 
-        // Generar y devolver el token
+        log.debug("Usuario {} registrado con email {}", cred.getUsuarioId(), cred.getEmail());
+
+        // JWT con sub = usuarioId
         return jwtService.generateToken(cred.getUsuarioId(), cred.getRole());
     }
 }

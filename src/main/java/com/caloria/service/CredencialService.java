@@ -1,3 +1,4 @@
+// src/main/java/com/caloria/service/CredencialService.java
 package com.caloria.service;
 
 import com.caloria.dto.RegistroCredencialDTO;
@@ -7,6 +8,8 @@ import com.caloria.repository.CredencialRepository;
 import com.caloria.repository.UsuarioRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -14,26 +17,28 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
+@Slf4j                               // ← habilita log.debug / info / warn
 @Service
-@RequiredArgsConstructor            // inyección por constructor
+@RequiredArgsConstructor
 public class CredencialService {
 
     private final CredencialRepository credencialRepository;
-    private final UsuarioRepository    usuarioRepository; 
-    private final PasswordEncoder passwordEncoder;   // ⬅️ se inyecta el bean definido en SecurityConfig
+    private final UsuarioRepository    usuarioRepository;
+    private final PasswordEncoder      passwordEncoder;
 
-    /**
-     * Registro paso 1 : crea la credencial (email + hash) y devuelve el objeto guardado.
-     * Genera un usuarioId nuevo y asigna rol USER por defecto.
-     */
+    /* ------------------------------------------------------------------ */
+    /* Registro: crea Credencial + Usuario vacío y devuelve la credencial */
+    /* ------------------------------------------------------------------ */
     public Credencial registrar(RegistroCredencialDTO dto) {
 
-        // 1. comprobar email duplicado
+        /* 1. email duplicado ------------------------------------------------ */
         if (credencialRepository.existsByEmail(dto.getEmail())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El email ya está registrado");
+            log.warn("Intento de registro con email ya existente: {}", dto.getEmail());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "El email ya está registrado");
         }
 
-        // 2. crear y guardar la credencial
+        /* 2. crear credencial ---------------------------------------------- */
         String uid = UUID.randomUUID().toString();
 
         Credencial cred = new Credencial();
@@ -43,32 +48,37 @@ public class CredencialService {
         cred.setUsuarioId(uid);
 
         credencialRepository.save(cred);
+        log.debug("Credencial guardada para {} (uid={})", cred.getEmail(), uid);
 
-        // 3. crear Usuario vacío si no existe
+        /* 3. crear usuario esqueleto si no existe -------------------------- */
         if (!usuarioRepository.existsById(uid)) {
             Usuario usr = new Usuario();
             usr.setId(uid);
             usuarioRepository.save(usr);
+            log.debug("Usuario esqueleto creado con id {}", uid);
         }
 
         return cred;
     }
 
-    /**
-     * Valida email + contraseña; si es correcto devuelve la Credencial,
-     * si no lanza 401 UNAUTHORIZED.
-     */
+    /* ------------------------------------------------------------------ */
+    /* Validación de login: email + contraseña                            */
+    /* ------------------------------------------------------------------ */
     public Credencial validar(String email, String rawPassword) {
 
         Credencial cred = credencialRepository.findByEmail(email);
 
         if (cred == null || !passwordEncoder.matches(rawPassword, cred.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales incorrectas");
+            log.warn("Login fallido para {}", email);
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "Credenciales incorrectas");
         }
+
+        log.debug("Login validado para {} (uid={})", email, cred.getUsuarioId());
         return cred;
     }
 
-    /** Utilidad opcional para consultas internas */
+    /* Utilidad: buscar credencial por email ------------------------------ */
     public Credencial buscarPorEmail(String email) {
         return credencialRepository.findByEmail(email);
     }
