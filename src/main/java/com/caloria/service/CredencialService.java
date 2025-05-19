@@ -26,36 +26,35 @@ public class CredencialService {
     private final UsuarioRepository    usuarioRepository;
     private final PasswordEncoder      passwordEncoder;
 
-    /* ------------------------------------------------------------------ */
-    /* Registro: crea Credencial + Usuario vacío y devuelve la credencial */
-    /* ------------------------------------------------------------------ */
+    /**
+     * Registro: crea Credencial + Usuario esqueleto (incluyendo email) y devuelve la credencial
+     */
     public Credencial registrar(RegistroCredencialDTO dto) {
 
-        /* 1. email duplicado ------------------------------------------------ */
+        // 1. Validar duplicado
         if (credencialRepository.existsByEmail(dto.getEmail())) {
             log.warn("Intento de registro con email ya existente: {}", dto.getEmail());
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "El email ya está registrado");
         }
 
-        /* 2. crear credencial ---------------------------------------------- */
+        // 2. Crear credencial
         String uid = UUID.randomUUID().toString();
-
         Credencial cred = new Credencial();
         cred.setEmail(dto.getEmail());
         cred.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         cred.setRole("ROLE_USER");
         cred.setUsuarioId(uid);
-
         credencialRepository.save(cred);
         log.debug("Credencial guardada para {} (uid={})", cred.getEmail(), uid);
 
-        /* 3. crear usuario esqueleto si no existe -------------------------- */
+        // 3. Crear usuario esqueleto con email
         if (!usuarioRepository.existsById(uid)) {
             Usuario usr = new Usuario();
             usr.setId(uid);
+            usr.setEmail(dto.getEmail());                // ← Guardamos email en Usuario
             usuarioRepository.save(usr);
-            log.debug("Usuario esqueleto creado con id {}", uid);
+            log.debug("Usuario esqueleto creado con id {} y email={}", uid, dto.getEmail());
         }
 
         return cred;

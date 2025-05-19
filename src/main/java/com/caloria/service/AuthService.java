@@ -2,7 +2,6 @@ package com.caloria.service;
 
 import com.caloria.dto.RegistroCredencialDTO;
 import com.caloria.model.Credencial;
-import com.caloria.model.Usuario;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;

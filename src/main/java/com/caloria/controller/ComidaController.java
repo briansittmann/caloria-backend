@@ -4,6 +4,13 @@ package com.caloria.controller;
 import com.caloria.dto.AlimentoDTO;
 import com.caloria.service.IAService;
 import lombok.RequiredArgsConstructor;
+import com.caloria.model.CatalogoAlimento;
+import com.caloria.service.CatalogoAlimentoService;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class ComidaController {
 
     private final IAService iaService;
+    private final CatalogoAlimentoService catalogoService;
 
     @PostMapping("/analizar")
     public String analizarComida(
@@ -26,5 +34,21 @@ public class ComidaController {
             dto.getGramos(),
             usuarioId
         );
+    }
+    
+    /**
+     * Importa un array JSON de CatalogoAlimento y guarda cada uno si no existía ya.
+     */
+    @PostMapping("/importar-catalogo")
+    public ResponseEntity<List<CatalogoAlimento>> importarCatalogo(
+            @RequestBody List<CatalogoAlimento> catalogoJson) {
+
+        List<CatalogoAlimento> resultado = catalogoJson.stream()
+            .map(catalogoService::guardarSiNoExisteCatalogo)
+            .collect(Collectors.toList());
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(resultado);
     }
 }

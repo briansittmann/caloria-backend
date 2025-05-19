@@ -3,12 +3,14 @@ package com.caloria.controller;
 import com.caloria.dto.*;
 import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
+import com.caloria.repository.CredencialRepository;
 import com.caloria.service.PerfilService;
 import com.caloria.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
@@ -21,23 +23,37 @@ public class PerfilController {
 
     private final UsuarioService usuarioService;
     private final PerfilService  perfilService;
+    private final CredencialRepository credRepo;
 
+    
     /**
-     * Crea o actualiza todo el perfil de golpe.
-     * POST /usuarios/perfil
+     * Lee el perfil completo.
+     * GET /usuarios/perfil
      */
-    @PostMapping
-    public ResponseEntity<Usuario> crearOActualizarPerfil(
+    @GetMapping
+    public ResponseEntity<Usuario> obtenerPerfil(Authentication auth) {
+        String uid = auth.getName();
+        Usuario perfil = usuarioService.obtenerPerfil(uid);
+
+        // Volcar el email desde Credencial
+        Optional.ofNullable(credRepo.findByUsuarioId(uid))
+            .ifPresent(cred -> perfil.setEmail(cred.getEmail()));
+
+        return ResponseEntity.ok(perfil);
+    }
+    
+    /** Crear o actualizar todo el perfil de golpe. */
+    @RequestMapping(method = { RequestMethod.POST, RequestMethod.PUT })
+    public ResponseEntity<Usuario> upsertPerfil(
         @Valid @RequestBody PerfilUsuarioDTO dto,
         Authentication auth
     ) {
-        String uid = auth.getName();
-        Usuario perfil = usuarioService.crearOActualizarPerfil(uid, dto);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(perfil);
+      String uid = auth.getName();
+      Usuario saved = usuarioService.crearOActualizarPerfil(uid, dto);
+      return ResponseEntity.ok(saved);
     }
-
+    
+    
     /**
      * Actualiza todo el perfil de golpe.
      * PUT /usuarios/perfil
@@ -97,18 +113,35 @@ public class PerfilController {
         Usuario usuario = perfilService.completarObjetivo(uid, nivel, dto.getObjetivo());
         return ResponseEntity.ok(usuario);
     }
+    
 
     /**
-     * Lee el perfil completo.
-     * GET /usuarios/perfil
+     * Paso 4 – preferencias y alergias.
+     * PUT /usuarios/perfil/preferencias
      */
-    @GetMapping
-    public ResponseEntity<Usuario> obtenerPerfil(Authentication auth) {
-        String uid = auth.getName();
-        Usuario perfil = usuarioService.obtenerPerfil(uid);
-        return ResponseEntity.ok(perfil);
+    @PutMapping("/preferencias")
+    public ResponseEntity<Usuario> actualizarPreferencias(
+        @Valid @RequestBody PreferenciasDTO dto,
+        Authentication auth
+    ) {
+      String uid = auth.getName();
+      // Este método sí marca preferenciasCompleto **y** revisa todo el perfil
+      Usuario u = perfilService.marcarPreferenciasCompleto(uid, dto);
+      return ResponseEntity.ok(u);
     }
-
+    
+    
+    /**
+     * Recalcula BMR, TDEE, caloríasMeta y macros para el usuario.
+     * PUT /usuarios/perfil/recalcular-metas
+     */
+    @PutMapping("/recalcular-metas")
+    public ResponseEntity<Usuario> recalcularMetas(Authentication auth) {
+        String uid = auth.getName();
+        Usuario actualizado = perfilService.recalcularMetas(uid);
+        return ResponseEntity.ok(actualizado);
+    }
+    
     /**
      * Solo indica si el perfil está completo.
      * GET /usuarios/perfil/completo

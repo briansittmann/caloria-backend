@@ -103,6 +103,5 @@ public class Usuario {
         redondeados.setGrasasG(      RoundingUtils.oneDecimal(macros.getGrasasG())      );
 
         this.macrosObjetivo = redondeados;
-        this.perfilCompleto = true;
     }
 }

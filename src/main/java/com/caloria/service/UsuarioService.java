@@ -3,6 +3,7 @@ package com.caloria.service;
 
 import com.caloria.dto.BasicosDTO;
 import com.caloria.dto.PerfilUsuarioDTO;
+import com.caloria.dto.PreferenciasDTO;
 import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
 import com.caloria.repository.UsuarioRepository;
@@ -52,7 +53,6 @@ public class UsuarioService {
         u.setHoraInicioDia(dto.getHoraInicioDia());
         u.setPreferencias(dto.getPreferencias());
         u.setAlergias(dto.getAlergias());
-        u.setPerfilCompleto(true);
 
         Usuario guardado = usuarioRepo.save(u);
         log.debug("Perfil completo guardado para uid={}", uid);
@@ -112,7 +112,27 @@ public class UsuarioService {
     public String obtenerNivelActividad(String uid) {
         return obtenerPerfil(uid).getNivelActividad();
     }
+    
+    
+    // -----------------------------------------
+    // Paso 4: preferencias y alergias
+    // -----------------------------------------
+    public Usuario actualizarPreferencias(String uid, PreferenciasDTO dto) {
+        // 1) Recupera el usuario (lanza 404 si no existe)
+        Usuario u = obtenerPerfil(uid);
 
+        // 2) Setea los nuevos arrays
+        u.setPreferencias(dto.getPreferencias());
+        u.setAlergias(dto.getAlergias());
+        u.setPreferenciasCompletas(true);
+
+        // 3) Guarda y loggea
+        Usuario saved = usuarioRepo.save(u);
+        log.debug("Preferencias guardadas para uid={}", uid);
+        return saved;
+    }
+    
+    
     /* ------------------------------------------------------------ */
     /* Recetas                                                      */
     /* ------------------------------------------------------------ */
@@ -140,4 +160,6 @@ public class UsuarioService {
             log.debug("Receta {} eliminada de uid={}", recetaId, uid);
         }
     }
+    
+    
 }

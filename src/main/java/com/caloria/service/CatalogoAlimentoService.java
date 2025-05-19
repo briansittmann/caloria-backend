@@ -33,7 +33,15 @@ public class CatalogoAlimentoService {
                     return repository.save(nuevo);
                 });
     }
-
+    
+    /**
+     * Guarda un objeto CatalogoAlimento si no existía ya uno con ese nombre.
+     */
+    public CatalogoAlimento guardarSiNoExisteCatalogo(CatalogoAlimento ca) {
+        return repository.findByNombreIgnoreCase(ca.getNombre())
+                         .orElseGet(() -> repository.save(ca));
+    }
+    
     /**
      * Lista todos los alimentos del catálogo.
      */
