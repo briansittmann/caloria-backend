@@ -23,17 +23,13 @@ public class ComidaController {
     private final CatalogoAlimentoService catalogoService;
 
     @PostMapping("/analizar")
-    public String analizarComida(
-            @RequestBody AlimentoDTO dto,
+    public ResponseEntity<String> analizarComida(
+            @RequestBody List<AlimentoDTO> dtos,
             Authentication auth) throws InterruptedException {
 
         String usuarioId = auth.getName();
-        // dto.getGramos() es double, ahora el servicio lo recibe como double
-        return iaService.analizarComida(
-            dto.getNombre(),
-            dto.getGramos(),
-            usuarioId
-        );
+        String json = iaService.analizarComida(dtos, usuarioId);
+        return ResponseEntity.ok(json);
     }
     
     /**
