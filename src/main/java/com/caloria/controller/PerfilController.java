@@ -1,7 +1,6 @@
 package com.caloria.controller;
 
 import com.caloria.dto.*;
-import com.caloria.model.Receta;
 import com.caloria.model.Usuario;
 import com.caloria.repository.CredencialRepository;
 import com.caloria.service.PerfilService;
@@ -9,13 +8,22 @@ import com.caloria.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-import java.util.List;
 import java.util.Optional;
 
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+
+/**
+ * Controlador REST que gestiona la creación, actualización y verificación
+ * del perfil de usuario en la aplicación.
+ *
+ * Coordina el flujo de onboarding por etapas (básicos, actividad, objetivo, preferencias)
+ * y permite recalcular las metas nutricionales según el perfil actual.
+ *
+ * Prefijo base: `/usuarios/perfil`
+ */
 @RestController
 @RequestMapping("/usuarios/perfil")
 @RequiredArgsConstructor
@@ -27,8 +35,11 @@ public class PerfilController {
 
     
     /**
-     * Lee el perfil completo.
-     * GET /usuarios/perfil
+     * Devuelve el perfil completo del usuario autenticado.
+     * Incluye información física, preferencias, metas nutricionales y recetas.
+     *
+     * @param auth Autenticación JWT con el ID del usuario
+     * @return Perfil de usuario
      */
     @GetMapping
     public ResponseEntity<Usuario> obtenerPerfil(Authentication auth) {
@@ -42,7 +53,16 @@ public class PerfilController {
         return ResponseEntity.ok(perfil);
     }
     
-    /** Crear o actualizar todo el perfil de golpe. */
+    
+    
+    /**
+     * Crea o actualiza de forma masiva el perfil del usuario.
+     * Útil cuando se completa todo el onboarding de una sola vez.
+     *
+     * @param dto DTO con todos los campos del perfil
+     * @param auth Autenticación JWT
+     * @return Perfil actualizado
+     */
     @RequestMapping(method = { RequestMethod.POST, RequestMethod.PUT })
     public ResponseEntity<Usuario> upsertPerfil(
         @Valid @RequestBody PerfilUsuarioDTO dto,
@@ -55,8 +75,11 @@ public class PerfilController {
     
     
     /**
-     * Actualiza todo el perfil de golpe.
-     * PUT /usuarios/perfil
+     * Actualiza todo el perfil del usuario (alternativa explícita por método PUT).
+     *
+     * @param dto Datos del perfil completo
+     * @param auth Token JWT del usuario
+     * @return Usuario actualizado
      */
     @PutMapping
     public ResponseEntity<Usuario> actualizarPerfil(
@@ -69,8 +92,12 @@ public class PerfilController {
     }
 
     /**
-     * Paso 1 – datos básicos.
-     * POST /usuarios/perfil/basicos
+     * Paso 1 – Registra los datos físicos básicos del usuario:
+     * nombre, edad, sexo, altura, peso y hora de inicio del día.
+     *
+     * @param dto Datos básicos
+     * @param auth Autenticación del usuario
+     * @return Usuario con básicos completados
      */
     @PostMapping("/basicos")
     public ResponseEntity<Usuario> actualizarBasicos(
@@ -85,8 +112,11 @@ public class PerfilController {
     }
 
     /**
-     * Paso 2 – nivel de actividad.
-     * POST /usuarios/perfil/actividad
+     * Paso 2 – Actualiza el nivel de actividad física del usuario.
+     *
+     * @param dto DTO con el nivel de actividad
+     * @param auth Autenticación del usuario
+     * @return Usuario actualizado con actividad completada
      */
     @PostMapping("/actividad")
     public ResponseEntity<Usuario> actualizarActividad(
@@ -99,8 +129,12 @@ public class PerfilController {
     }
 
     /**
-     * Paso 3 – objetivo nutricional.
-     * POST /usuarios/perfil/objetivo
+     * Paso 3 – Registra el objetivo nutricional del usuario (cut, mantenimiento, bulk)
+     * y calcula sus calorías y macros objetivo.
+     *
+     * @param dto Objetivo nutricional elegido
+     * @param auth Autenticación del usuario
+     * @return Usuario con metas aplicadas
      */
     @PostMapping("/objetivo")
     public ResponseEntity<Usuario> actualizarObjetivo(
@@ -116,8 +150,12 @@ public class PerfilController {
     
 
     /**
-     * Paso 4 – preferencias y alergias.
-     * PUT /usuarios/perfil/preferencias
+     * Paso 4 – Guarda las preferencias alimenticias y alergias del usuario.
+     * Marca el paso como completo y revisa si todo el perfil ya está configurado.
+     *
+     * @param dto Preferencias y alergias
+     * @param auth Token JWT
+     * @return Usuario actualizado
      */
     @PutMapping("/preferencias")
     public ResponseEntity<Usuario> actualizarPreferencias(
@@ -132,8 +170,11 @@ public class PerfilController {
     
     
     /**
-     * Recalcula BMR, TDEE, caloríasMeta y macros para el usuario.
-     * PUT /usuarios/perfil/recalcular-metas
+     * Fuerza el recálculo de las metas nutricionales (BMR, TDEE, calorías, macros),
+     * utilizando los datos actuales del perfil.
+     *
+     * @param auth Autenticación del usuario
+     * @return Usuario con metas recalculadas
      */
     @PutMapping("/recalcular-metas")
     public ResponseEntity<Usuario> recalcularMetas(Authentication auth) {
@@ -143,8 +184,11 @@ public class PerfilController {
     }
     
     /**
-     * Solo indica si el perfil está completo.
-     * GET /usuarios/perfil/completo
+     * Verifica si el perfil del usuario está completamente configurado.
+     * Es decir, si los 4 pasos del onboarding están completos.
+     *
+     * @param auth Autenticación del usuario
+     * @return true si el perfil está completo
      */
     @GetMapping("/completo")
     public ResponseEntity<PerfilCompletoDTO> estaPerfilCompleto(Authentication auth) {
@@ -154,8 +198,11 @@ public class PerfilController {
     }
     
     /**
-     * Estado granular de cada fase del perfil.
-     * GET /usuarios/perfil/estado
+     * Devuelve el estado detallado del progreso del perfil,
+     * indicando qué pasos se han completado y si el perfil está listo.
+     *
+     * @param auth Autenticación del usuario
+     * @return DTO con flags de estado por fase
      */
     @GetMapping("/estado")
     public ResponseEntity<PerfilEstadoDTO> estadoPerfil(Authentication auth) {

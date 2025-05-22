@@ -3,6 +3,13 @@ package com.caloria.dto;
 import com.caloria.model.Macros;
 import lombok.Data;
 
+
+/**
+ * DTO que resume el estado nutricional del usuario en el día actual.
+ *
+ * Incluye calorías objetivo, consumidas y restantes, así como los macronutrientes
+ * y el número de consejos generados por IA.
+ */
 @Data
 public class ResumenDiaDTO {
 
@@ -17,3 +24,4 @@ public class ResumenDiaDTO {
     
     private int consejosGenerados;
 }
+

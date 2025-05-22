@@ -17,6 +17,16 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+
+/**
+ * Controlador REST encargado de la generación, guardado y recuperación
+ * de recetas personalizadas dentro del perfil del usuario.
+ *
+ * Se comunica con IAService para obtener recetas nutricionalmente ajustadas,
+ * y con UsuarioService y CatalogoRecetasService para almacenarlas o eliminarlas.
+ *
+ * Prefijo base: `/recetas`
+ */
 @RestController
 @RequestMapping("/recetas")
 @RequiredArgsConstructor
@@ -27,7 +37,20 @@ public class RecetaController {
     private final UsuarioService usuarioService;
     private final CatalogoRecetasService catalogoService;
     private final ObjectMapper objectMapper;  // bean de Jackson
-
+    
+    
+    /**
+     * Genera recetas personalizadas a través de un asistente de IA,
+     * utilizando las preferencias del usuario y sus macronutrientes restantes.
+     *
+     * El JSON devuelto por la IA se parsea a objetos Receta,
+     * que luego se guardan en el catálogo (si no existen).
+     *
+     * @param numComidas Número de recetas deseadas (1–4)
+     * @param auth Token JWT que contiene el ID del usuario
+     * @return Lista de recetas generadas y guardadas
+     * @throws Exception si falla el parseo del JSON o la llamada a IA
+     */
     @PostMapping("/generar")
     public ResponseEntity<List<Receta>> generarYGuardarRecetas(
             @RequestParam int numComidas,
@@ -69,13 +92,25 @@ public class RecetaController {
         return ResponseEntity.ok(guardadas);
     }
 
-    /** Simple DTO auxiliar para poder parsear el array desde el JSON de la IA */
+    /**
+     * DTO auxiliar usado para parsear la estructura de respuesta
+     * de la IA (JSON con clave "recetas").
+     */
     public static class RecetasWrapper {
         private List<Receta> recetas;
         public List<Receta> getRecetas() { return recetas; }
         public void setRecetas(List<Receta> recetas) { this.recetas = recetas; }
     }
     
+    
+    /**
+     * Asocia una o más recetas a la lista personal del usuario.
+     * Se utiliza principalmente para guardar recetas generadas previamente por IA.
+     *
+     * @param recetasIA Lista de recetas completas
+     * @param auth Token JWT con el ID del usuario
+     * @return Lista de recetas efectivamente guardadas
+     */
     @PostMapping("/guardar")
     public ResponseEntity<List<Receta>> guardarRecetasIA(
         @RequestBody List<Receta> recetasIA,
@@ -92,9 +127,11 @@ public class RecetaController {
       return ResponseEntity.ok(asociadas);
     }
     
-
     /**
-     * Devuelve todas las recetas guardadas en el perfil del usuario.
+     * Devuelve todas las recetas que el usuario ha guardado en su perfil.
+     *
+     * @param auth Token JWT del usuario
+     * @return Lista de recetas asociadas al usuario
      */
     @GetMapping("/mis")
     public ResponseEntity<List<Receta>> misRecetas(Authentication auth) {
@@ -103,7 +140,13 @@ public class RecetaController {
         return ResponseEntity.ok(recetas);
     }
     
-    /** Elimina una receta del array del usuario */
+    /**
+     * Elimina una receta previamente guardada en el perfil del usuario.
+     *
+     * @param recetaId ID de la receta a eliminar
+     * @param auth Token JWT con el ID del usuario
+     * @return HTTP 204 si la eliminación fue exitosa
+     */
     @DeleteMapping("/{recetaId}")
     public ResponseEntity<Void> eliminarReceta(
         @PathVariable String recetaId,

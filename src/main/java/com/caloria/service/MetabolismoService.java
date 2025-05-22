@@ -6,15 +6,20 @@ import com.caloria.model.Macros;
 import org.springframework.stereotype.Service;
 
 /**
+ * Servicio encargado de calcular el metabolismo del usuario,
+ * estimando su gasto energético y distribuyendo sus requerimientos calóricos
+ * en macronutrientes, en función de su perfil, nivel de actividad física y objetivo nutricional.
+ *
+ * Utiliza fórmulas estándar como la de Mifflin–St Jeor y factores ajustados
+ * por objetivo (definición, mantenimiento, volumen).
+ *
  * Abreviaturas utilizadas en esta clase:
- * 
  * - BMR: Basal Metabolic Rate (Tasa Metabólica Basal)
  * - TDEE: Total Daily Energy Expenditure (Gasto Energético Diario Total)
  * - PAL: Physical Activity Level (Nivel de Actividad Física)
  * - g: gramos
  * - kcal: kilocalorías
  */
-
 @Service
 public class MetabolismoService {
 

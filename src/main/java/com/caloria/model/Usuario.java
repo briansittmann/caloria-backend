@@ -12,6 +12,15 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
+/**
+ * Entidad que representa el perfil completo de un usuario,
+ * incluyendo datos personales, preferencias alimenticias, historial diario
+ * y metas nutricionales generadas por IA.
+ *
+ * El perfil se construye por etapas (básicos, actividad, objetivo, preferencias),
+ * y una vez completo, se calculan y almacenan las calorías y macros objetivo.
+ */
 @Data
 @Document(collection = "usuarios")
 public class Usuario {
@@ -47,12 +56,21 @@ public class Usuario {
     private boolean perfilCompleto = false;
 
     
-    
+    // Historial de progreso
     @JsonIgnore
     private List<Dia> historialDeDias = new ArrayList<>();
+ // Recetas guardadas por el usuario
     private List<String> recetas = new ArrayList<>();
 
-    /** Devuelve o crea el Día actual según la hora de inicio. */
+    /**
+     * Devuelve el día activo del usuario teniendo en cuenta la hora de inicio.
+     * Si no existe, lo crea.
+     *
+     * La hora de inicio permite que el día nutricional comience, por ejemplo,
+     * a las 04:00 para usuarios nocturnos. Esto influye en la fecha efectiva.
+     *
+     * @return Objeto Dia correspondiente a la jornada actual.
+     */
     public Dia obtenerDiaActual() {
         LocalTime inicio = LocalTime.parse(this.horaInicioDia);
         LocalDate hoy   = LocalDate.now();
@@ -75,7 +93,16 @@ public class Usuario {
         return nuevo;
     }
 
-    /** Suma y redondea macros y calorías al día actual. */
+
+    /**
+     * Suma una nueva ingesta de macronutrientes al día actual,
+     * redondeando cada valor a un decimal.
+     *
+     * @param proteinas gramos de proteína
+     * @param carbohidratos gramos de carbohidratos
+     * @param grasas gramos de grasa
+     * @param calorias kilocalorías
+     */
     public void actualizarMacronutrientes(
             Double proteinas, Double carbohidratos, Double grasas, Double calorias) {
 
@@ -90,7 +117,11 @@ public class Usuario {
     }
 
     /**
-     * Redondea y guarda calorías y macros objetivo, marca perfil completo.
+     * Aplica los objetivos nutricionales del usuario redondeando a enteros y 1 decimal.
+     * Se invoca una vez que el perfil está completamente configurado.
+     *
+     * @param calorias calorías diarias objetivo
+     * @param macros macronutrientes diarios objetivo
      */
     public void aplicarMetas(double calorias, Macros macros) {
         // Calorías a entero

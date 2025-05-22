@@ -7,9 +7,29 @@ import okhttp3.ResponseBody;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+
+/**
+ * Configuración personalizada de OkHttpClient para llamadas a la API de OpenAI Assistants (v2).
+ *
+ * Este cliente:
+ * - Agrega el header `OpenAI-Beta: assistants=v2` requerido por la API.
+ * - Intercepta respuestas JSON para asegurar la presencia del campo `file_ids` en determinadas rutas.
+ *
+ * Es utilizado por el servicio `IAService` para interactuar con los asistentes de OpenAI.
+ */
 @Configuration
 public class OkHttpClientConfig {
-
+	
+	
+    /**
+     * Crea un cliente OkHttp con un interceptor que modifica tanto la petición
+     * como la respuesta para adaptarse a las restricciones de la API de OpenAI.
+     *
+     * - Añade un header necesario para habilitar la versión v2 de Assistants.
+     * - Si la respuesta JSON de ciertos endpoints no contiene `file_ids`, lo inyecta.
+     *
+     * @return Cliente OkHttp personalizado para IA
+     */
     @Bean
     public OkHttpClient okHttpClientWithHeader() {
         return new OkHttpClient.Builder()

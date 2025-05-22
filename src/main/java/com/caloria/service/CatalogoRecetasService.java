@@ -13,6 +13,11 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+
+/**
+ * Servicio que gestiona el catálogo de recetas disponibles para los usuarios.
+ * Permite guardar recetas únicas, parsear respuestas desde IA y recuperar por ID.
+ */
 @Service
 @RequiredArgsConstructor
 public class CatalogoRecetasService {
@@ -20,6 +25,14 @@ public class CatalogoRecetasService {
     private final CatalogoRecetasRepository repo;
     private final ObjectMapper mapper;
 
+    /**
+     * Parsea una cadena JSON que contiene recetas bajo el nodo "recetas"
+     * y las guarda en el catálogo si no estaban previamente.
+     *
+     * @param json Cadena JSON con el campo "recetas"
+     * @return Lista de recetas persistidas (sin duplicados)
+     * @throws JsonProcessingException Si el JSON es inválido
+     */
     public List<Receta> parseYGuardar(String json) throws JsonProcessingException {
         JsonNode root = mapper.readTree(json).get("recetas");
         List<Receta> lista = new ArrayList<>();
@@ -31,8 +44,13 @@ public class CatalogoRecetasService {
         }
         return lista;
     }
+    
+    
     /**
-     * Inserta la receta en el catálogo si no existe (por título, case-insensitive).
+     * Inserta una receta en la base de datos sólo si no existe otra con el mismo título (ignora mayúsculas).
+     *
+     * @param receta Receta a insertar
+     * @return Receta existente o nueva
      */
     public Receta saveIfNotExists(Receta receta) {
         return repo.findByTituloIgnoreCase(receta.getTitulo())
@@ -40,7 +58,10 @@ public class CatalogoRecetasService {
     }
     
     /**
-     * Recupera todas las recetas cuyos IDs están en la lista dada.
+     * Recupera una lista de recetas a partir de sus IDs.
+     *
+     * @param ids Lista de IDs de recetas
+     * @return Recetas correspondientes
      */
     public List<Receta> findAllByIds(List<String> ids) {
       return repo.findAllById(ids);

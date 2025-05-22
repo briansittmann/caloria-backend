@@ -13,6 +13,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
+
+
+
+/**
+ * Servicio encargado de gestionar la configuración y completitud del perfil nutricional del usuario.
+ *
+ * Permite marcar como completados los pasos del onboarding (datos básicos, nivel de actividad, objetivo, preferencias)
+ * y calcular automáticamente las metas calóricas y macronutrientes cuando se selecciona un objetivo nutricional.
+ *
+ * Colabora estrechamente con el {@link MetabolismoService} para realizar los cálculos personalizados.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -22,9 +33,12 @@ public class PerfilService {
     private final MetabolismoService metabolismo;
 
 
-    
     /**
-     * Recalcula títulos y macros de un usuario si ya tiene actividad y objetivo
+     * Si el usuario ya ha indicado nivel de actividad y objetivo nutricional,
+     * recalcula sus calorías y macros objetivo.
+     *
+     * @param usuarioId ID del usuario
+     * @return Usuario actualizado (no guardado si no recalcula)
      */
     public Usuario recalcularMetas(String usuarioId) {
         Usuario u = usuarioRepo.findById(usuarioId)
@@ -35,7 +49,9 @@ public class PerfilService {
         return u;
     }
 
-    /** Marca que el paso de básicos está completado y revisa si el perfil ya está completo */
+    /**
+     * Marca como completado el paso de datos básicos y revisa si el perfil está completo.
+     */
     public Usuario marcarBasicosCompletos(String usuarioId) {
         Usuario u = usuarioRepo.findById(usuarioId)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
@@ -44,7 +60,9 @@ public class PerfilService {
         return usuarioRepo.save(u);
     }
 
-    /** Marca que el paso de actividad está completado y revisa si el perfil ya está completo */
+    /**
+     * Marca como completado el paso de actividad física y revisa si el perfil está completo.
+     */
     public Usuario marcarActividadCompleta(String usuarioId) {
         Usuario u = usuarioRepo.findById(usuarioId)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
@@ -53,7 +71,9 @@ public class PerfilService {
         return usuarioRepo.save(u);
     }
 
-    /** Marca que el paso de objetivo está completado y revisa si el perfil ya está completo */
+    /**
+     * Marca como completado el paso de objetivo nutricional y revisa si el perfil está completo.
+     */
     public Usuario marcarObjetivoCompleto(String usuarioId) {
         Usuario u = usuarioRepo.findById(usuarioId)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
@@ -63,7 +83,15 @@ public class PerfilService {
         return usuarioRepo.save(u);
     }
     
-    /** Marca que el paso de preferencias está completado y revisa si el perfil ya está completo */
+    
+    /**
+     * Guarda las preferencias y alergias del usuario, marca ese paso como completado
+     * y verifica si ya se cumplen las condiciones para considerar el perfil como completo.
+     *
+     * @param usuarioId ID del usuario
+     * @param dto DTO con listas de preferencias y alergias
+     * @return Usuario actualizado
+     */
     public Usuario marcarPreferenciasCompleto(String usuarioId, PreferenciasDTO dto) {
         Usuario u = usuarioRepo.findById(usuarioId)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
@@ -84,20 +112,29 @@ public class PerfilService {
       }
     
     /**
-     * Paso final: calcula y guarda calorías y macros meta para un usuario
+     * Calcula las calorías y macronutrientes objetivo a partir del peso, altura, edad, sexo,
+     * nivel de actividad física y objetivo nutricional del usuario.
+     *
+     * Este método es el paso final del onboarding y marca automáticamente el perfil como completo si corresponde.
+     *
+     * @param usuarioId ID del usuario
+     * @param nivelActStr Nivel de actividad (valor del enum NivelActividad)
+     * @param objetivoStr Objetivo nutricional (valor del enum ObjetivoNutricional)
+     * @return Usuario actualizado con metas aplicadas
      */
     public Usuario completarObjetivo(String usuarioId, String nivelActStr, String objetivoStr) {
         Usuario u = usuarioRepo.findById(usuarioId)
             .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Usuario no encontrado"));
 
-        // 1️⃣ Aplico las metas
+        // 1️⃣ Calcula BMR → TDEE → Calorías objetivo → Macros
         double bmr = metabolismo.calcularBmr(u.getPesoKg(), u.getAlturaCm(), u.getEdad(), u.getSexo());
         NivelActividad nivel = NivelActividad.valueOf(nivelActStr.toUpperCase());
         double tdee = metabolismo.calcularTdee(bmr, nivel);
         ObjetivoNutricional obj = ObjetivoNutricional.valueOf(objetivoStr.toUpperCase());
         double caloriasMeta = metabolismo.calcularCaloriasObjetivo(tdee, obj);
         Macros macrosMeta = metabolismo.calcularMacrosObjetivo(caloriasMeta);
-
+        
+        // 2️⃣ Aplica las metas al usuario
         u.setObjetivo(objetivoStr);
         u.aplicarMetas(caloriasMeta, macrosMeta);
 
@@ -105,12 +142,20 @@ public class PerfilService {
         u.setObjetivoCompleto(true);
         revisarPerfilCompleto(u);
 
-        // 3️⃣ Guardo UNA sola vez (con calorías, macros, objetivoCompleto y perfilCompleto bien calculados)
+        // 3️⃣ Guarda el estado final completo
         return usuarioRepo.save(u);
       }
     
     
-
+    /**
+     * Verifica si el perfil del usuario está completamente configurado.
+     * Esto ocurre cuando se han completado los pasos de:
+     * básicos, actividad, objetivo y preferencias.
+     *
+     * Si el perfil está completo, se marca el flag correspondiente.
+     *
+     * @param u Objeto Usuario a evaluar y modificar
+     */
     private void revisarPerfilCompleto(Usuario u) {
         boolean completo =
           u.isBasicosCompletos() &&
