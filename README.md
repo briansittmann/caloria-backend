@@ -1,4 +1,4 @@
-# 🍽️ CalorIA – Backend
+# CalorIA – Backend
 
 **CalorIA** es una API REST desarrollada en Java con Spring Boot que actúa como backend para una app móvil de coaching nutricional. Permite a los usuarios registrar su perfil, definir objetivos alimentarios, analizar comidas y generar recetas personalizadas usando IA.
 
